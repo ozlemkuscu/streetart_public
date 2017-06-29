@@ -84,7 +84,7 @@ function initForm() {
   dataCreated = moment(dataCreated).format(config.dateTimeFormat);
   $("#recCreated").val(dataCreated);
 
-  $("#Status").val("New");
+  $("#lsteStatus").val("New");
 
   $("#closebtn").click(function () { window.close(); });
   $("#printbtn").click(function () { window.print(); });
