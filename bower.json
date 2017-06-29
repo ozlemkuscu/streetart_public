@@ -1,0 +1,12 @@
+{
+  "name": "graffiti_exemption",
+  "description": "Graffiti Exemptions",
+  "authors": [
+    "Ozlem Kuscu"
+  ],
+  "private": true,
+  "dependencies": {
+    "core": "https://github.com/CityofToronto/corejs.git#3.0.0",
+    "dropzone":"dropzone#^4.3.0"
+  }
+}

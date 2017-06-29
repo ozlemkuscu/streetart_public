@@ -1,0 +1,43 @@
+$main-font-size: 10px;
+
+#maincontent ul.nav { overflow:inherit}
+
+// added by Graham
+#maincontent #view_pane .dataTable th, #maincontent #view_pane .dataTable td {word-break: keep-all;white-space:nowrap}
+//.dataTable th, .dataTable td {white-space:nowrap}
+
+#maincontent .dataTables_scrollHeadInner table.dataTable, #maincontent form .dataTables_scrollHeadInner table.dataTable {
+    margin-bottom: 0px;
+    margin-bottom: 0px;
+}
+
+#maincontent .dataTables_scrollBody table.dataTable, #maincontent form .dataTables_scrollBody table.dataTable {
+    margin-top: 0px;
+    margin-bottom:0px;
+}
+
+#maincontent .dataTables_scrollFoot table.dataTable{
+margin-top: 0px;
+}
+#admin_search {
+  margin-top: 5px;
+}
+#admininterface #app_Navbar{margin-top:10px;font-size:85%;}
+#admininterface #admin_search .form-control{font-size:90%;}
+#admininterface #viewtitle{font-size:90%;}
+#app-header h1 {font-size:100%;}
+#admininterface h2 {
+  font-size: 2em;
+  margin: 0;
+}
+#maincontent #view_pane th{font-size: 85%;padding:3px;margin:0;}
+#maincontent #view_pane td{font-size:85%;padding:3px;margin:0;}
+#maincontent #view_pane {font-size:85%;}
+#appDisplay select.form-control {
+  height: 28px;
+}
+
+.bootstrap-datetimepicker-widget table td.active, .bootstrap-datetimepicker-widget table td.active:hover {
+    background-color: #337ab7 !important;
+    color: #ffffff;
+}
