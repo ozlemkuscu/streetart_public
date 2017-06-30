@@ -41,7 +41,7 @@ $(document).ready(function () {
       title: 'Request for Regularization for Art Mural/Graffiti Art under Municipal Code Chapter 485, Graffiti',
       useBinding: false,
       rootPath: config.httpHost.rootPath_public[httpHost],
-      sections: getSubmissionSections(),
+      sections: $.merge(getSubmissionSections(), getAdminSectionsBottom()),
       success: function () {
       }
     });
@@ -77,7 +77,6 @@ $(document).ready(function () {
     }
   }
 });
-
 function initForm() {
 
   var dataCreated = new Date();
@@ -89,10 +88,21 @@ function initForm() {
   $("#closebtn").click(function () { window.close(); });
   $("#printbtn").click(function () { window.print(); });
   $("#savebtn").click(function () {
-
     let form_fv = $('#' + form_id).data('formValidation');
     form_fv.validate();
     if (form_fv.isValid()) { submitForm() }
+  });
+
+  $('#eNotice').on('click', function () {
+    //  if(this.value == config.status.ApprovedHRC){
+    $('#' + form_id).formValidation('revalidateField', $('#ComplianceDate'));
+    //  }
+  });
+
+  $('#eMaintenance').on('change', function () {
+    //  if(this.value == config.status.ApprovedHRC){
+    $('#' + form_id).formValidation('revalidateField', $('#eMaintenanceAgreement'));
+    //  }
   });
 
   $(".dz-hidden-input").attr("aria-hidden", "true");
@@ -106,7 +116,7 @@ function submitForm() {
   let payload = form.getData();
   payload.docUploads = processUploads(docDropzone, repo, false);
   payload.imageUploads = processUploads(imageDropzone, repo, false);
-console.log(JSON.stringify(payload));
+  console.log(JSON.stringify(payload));
   $.ajax({
     url: config.httpHost.app_public[httpHost] + config.api_public.post + repo + '?sid=' + getCookie(cookie_SID),
     type: 'POST',
@@ -160,12 +170,12 @@ function getSubmissionSections() {
             //"required": true,
             {
               "id": "eFirstName", "title": app.data["First Name"],
-                "required": true,
+              "required": true,
               "className": "col-xs-12 col-md-6"
             },
             {
               "id": "eLastName", "title": app.data["Last Name"],
-                "required": true,
+              "required": true,
               "className": "col-xs-12 col-md-6"
             },
             {
@@ -208,7 +218,7 @@ function getSubmissionSections() {
               //  "required": true, 
               "className": "col-xs-12 col-md-6"
             },
-            { "id": "emCity", "title": app.data["City"], "className": "col-xs-12 col-md-6" }
+            { "id": "emCity", "title": app.data["City"], "value": "Toronto", "className": "col-xs-12 col-md-6" }
           ]
         },
         {
@@ -219,9 +229,11 @@ function getSubmissionSections() {
             //  "required": true, 
             "className": "col-xs-12 col-md-6"
           },
-          { "id": "emDescriptiveLocation", "prehelptext": app.data["DescriptiveLocationText"], "title": app.data["graffitiDesLocation"], 
-        //  "required": true, 
-          "type": "textarea", "className": "col-xs-12 col-md-12" }
+          {
+            "id": "emDescriptiveLocation", "prehelptext": app.data["DescriptiveLocationText"], "title": app.data["graffitiDesLocation"],
+            //  "required": true, 
+            "type": "textarea", "className": "col-xs-12 col-md-12"
+          }
           ]
         }
       ]
@@ -241,32 +253,41 @@ function getSubmissionSections() {
               "className": "col-xs-12 col-md-12",
               "choices": config.choices.yesNoFull,
               "orientation": "horizontal"
-            },
-            {
+            }, {
               "id": "eNotice",
               "title": app.data["notice"],
               //  "required": true,
-              "type": "radio",
+              //  "type": "radio",
+              "type": "dropdown",
+              "value": "No",
               "className": "col-xs-12 col-md-12",
               "choices": config.choices.yesNoFull,
               "orientation": "horizontal"
-            }
-            ,
-            {
+            }, {
               "id": "ComplianceDate",
               "title": app.data["compliance"],
               //  "required": true,
               "type": "datetimepicker",
               "placeholder": config.dateFormat,
               "className": "col-xs-12 col-md-6",
-              "options": { format: config.dateFormat, maxDate: new Date() },
-              "orientation": "horizontal"
-            },
-            {
+              "options": { format: config.dateFormat },
+              "validators": {
+                callback: {
+                  message: app.data["compliance"] + ' is required',
+                  // this is added to formValidation
+                  callback: function (value, validator, $field) {
+                    var checkVal = $("#eNotice").val();
+                    return (checkVal !== "Yes") ? true : (value !== '');
+                  }
+                }
+              }
+            }, {
               "id": "eMaintenance",
               "title": app.data["maintenance"],
               //  "required": true,
-              "type": "radio",
+              //  "type": "radio",
+              "type": "dropdown",
+              "value": "No",
               "className": "col-xs-12 col-md-12",
               "choices": config.choices.yesNoFull,
               "orientation": "horizontal"
@@ -274,7 +295,17 @@ function getSubmissionSections() {
             {
               "id": "eMaintenanceAgreement", "title": app.data["agreementDetails"],
               //  "required": true, 
-              "className": "col-xs-12 col-md-12"
+              "className": "col-xs-12 col-md-12",
+              "validators": {
+                callback: {
+                  message: app.data["agreementDetails"] + ' is required',
+                  // this is added to formValidation
+                  callback: function (value, validator, $field) {
+                    var checkVal = $("#eMaintenance").val();
+                    return (checkVal !== "Yes") ? true : (value !== '');
+                  }
+                }
+              }
             },
             {
               "id": "eArtistInfo", "title": app.data["artistDetails"],
@@ -319,7 +350,23 @@ function getSubmissionSections() {
               type: "html",
               className: "col-xs-12 col-md-12",
               html: `<div id="successFailArea" className="col-xs-12 col-md-12"></div>`
-            },
+            }]
+
+        }
+      ]
+    }
+  ]
+  return section;
+}
+function getAdminSectionsBottom() {
+  let section = [
+    {
+      id: "hiddenSec",
+      title: "",
+      className: "panel-info",
+      rows: [
+        {
+          fields: [
             {
               "id": "fid",
               "type": "html",
@@ -343,7 +390,7 @@ function getSubmissionSections() {
             }, {
               "id": "lsteStatus",
               "type": "html",
-              "html": "<input type=\"hidden\" aria-label=\"Status\" aria-hidden=\"true\" id=\"lsteStatus\" name=\"lsteStatus\">",
+              "html": "<input type=\"hidden\" aria-label=\"Status\" aria-hidden=\"true\" value=\"New\" id=\"lsteStatus\" name=\"lsteStatus\">",
               "class": "hidden"
             }, {
               "id": "AddressGeoID",
