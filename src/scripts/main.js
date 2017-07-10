@@ -7,13 +7,15 @@ let form, config, httpHost;
 const form_id = "graffiti_exemption";
 let docDropzone;
 let imageDropzone;
-let cookie_SID = 'graffiti_exemption.sid';
+let cookie_SID = form_id + ".sid";
 
 let repo = "graffiti_exemption";
 
 $(document).ready(function () {
-
-  app.render(function () { initialize(); });
+  app.render(function () {
+    initialize();
+  }
+  );
   function renderApp() {
     httpHost = detectHost();
     loadForm();
@@ -23,28 +25,22 @@ $(document).ready(function () {
       "dz_id": "document_dropzone", "fid": "", "form_id": form_id,
       "url": config.api_public.upload + config.default_repo + '/' + repo,
     }));
-
     imageDropzone = new Dropzone("div#image_dropzone", $.extend(config.admin.imageDropzonePublic, {
+      "init": function () {
+        let fieldname = "txtPicName";
+        this
+          .on("addedfile", function (file) { validateUpload("addedfile", fieldname, file.name); })
+          .on("success", function (file) { validateUpload("success", fieldname, file.name); })
+          .on("removedfile", function () { validateUpload("removedFile", fieldname, ""); })
+          .on("error", function () { validateUpload("error", fieldname, ""); });
+      },
       "dz_id": "image_dropzone", "fid": "", "form_id": form_id,
       "url": config.api_public.upload + config.default_repo + '/' + repo,
     }));
-
     initForm();
-
   }
   function initialize() {
     loadVariables();
-  }
-  function loadForm() {
-    form = new CotForm({
-      id: form_id,
-      title: 'Request for Regularization for Art Mural/Graffiti Art under Municipal Code Chapter 485, Graffiti',
-      useBinding: false,
-      rootPath: config.httpHost.rootPath_public[httpHost],
-      sections: $.merge(getSubmissionSections(), getAdminSectionsBottom()),
-      success: function () {
-      }
-    });
   }
   function loadVariables() {
     $.ajax({
@@ -63,6 +59,17 @@ $(document).ready(function () {
       }
     })
   }
+  function loadForm() {
+    form = new CotForm({
+      id: form_id,
+      title: app.data["Form Title"],
+      useBinding: false,
+      rootPath: config.httpHost.rootPath_public[httpHost],
+      sections: $.merge(getSubmissionSections(), getAdminSectionsBottom()),
+      success: function () {
+      }
+    });
+  }
   function detectHost() {
     switch (window.location.origin) {
       case config.httpHost.root_public.dev:
@@ -78,13 +85,10 @@ $(document).ready(function () {
   }
 });
 function initForm() {
-
   var dataCreated = new Date();
   dataCreated = moment(dataCreated).format(config.dateTimeFormat);
   $("#recCreated").val(dataCreated);
-
   $("#lsteStatus").val("New");
-
   $("#closebtn").click(function () { window.close(); });
   $("#printbtn").click(function () { window.print(); });
   $("#savebtn").click(function () {
@@ -92,31 +96,20 @@ function initForm() {
     form_fv.validate();
     if (form_fv.isValid()) { submitForm() }
   });
-
-  $('#eNotice').on('click', function () {
-    //  if(this.value == config.status.ApprovedHRC){
-    $('#' + form_id).formValidation('revalidateField', $('#ComplianceDate'));
-    //  }
-  });
-
-  $('#eMaintenance').on('change', function () {
-    //  if(this.value == config.status.ApprovedHRC){
-    $('#' + form_id).formValidation('revalidateField', $('#eMaintenanceAgreement'));
-    //  }
-  });
-
+  $('#eNotice').on('click', function () { $('#' + form_id).formValidation('revalidateField', $('#ComplianceDate')); });
+  $('#eMaintenance').on('change', function () { $('#' + form_id).formValidation('revalidateField', $('#eMaintenanceAgreement')); });
   $(".dz-hidden-input").attr("aria-hidden", "true");
   $(".dz-hidden-input").attr("aria-label", "File Upload Control");
 
-  //$("h1").hide();
-
+  $('#' + form_id).data('formValidation')
+    .addField('txtPicName', { excluded: false, validators: { notEmpty: { message: app.data["imageValidation"] } } })
 }
 function submitForm() {
   //  $("#savebtn").prop('disabled', true);
   let payload = form.getData();
-  payload.docUploads = processUploads(docDropzone, repo, false);
-  payload.imageUploads = processUploads(imageDropzone, repo, false);
-  console.log(JSON.stringify(payload));
+  payload.doc_uploads = processUploads(docDropzone, repo, false);
+  payload.image_uploads = processUploads(imageDropzone, repo, false);
+
   $.ajax({
     url: config.httpHost.app_public[httpHost] + config.api_public.post + repo + '?sid=' + getCookie(cookie_SID),
     type: 'POST',
@@ -135,9 +128,60 @@ function submitForm() {
     error: function () {
       $('#successFailArea').html(config.messages.submit.fail);
     }
-  }).done(function () {
+  }).done(function (data, textStatus, jqXHR) {
+    // notify code section
+    if (data && data.EventMessageResponse && data.EventMessageResponse.Event && data.EventMessageResponse.Event.EventID) {
+      // Email report notice to emergency management captain and incident manager/reporters
+      emailNotice(data.EventMessageResponse.Event.EventID, 'notify', ['captain']);
+    } else {
+      hasher.setHash('new?alert=danger&msg=' + msg.fail + '&ts=' + new Date().getTime());
+    }
   });
 }
+function emailNotice(fid, action, recipients) {
+  var emailCaptain = "'Ozlem Kuscu': 'ozlem.kuscu@toronto.ca'";//config.captain;
+  if (typeof emailCaptain !== 'undefined' && emailCaptain != "") {
+    var emailTo = config.captain;
+    var emailRecipients = $.map(emailTo, function (email) {
+      return email;
+    }).filter(function (itm, i, a) {
+      return i === a.indexOf(itm);
+    }).join(',');
+
+    console.log('------------' + emailRecipients, fid);
+
+    var payload = JSON.stringify({
+      'email': emailRecipients,
+      'id': fid,
+      'status': action,
+      'home': 'temp'
+    });
+
+    /*$.ajax({
+      url: config.api.email,
+      type: 'POST',
+      data: payload,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8;',
+        'Cache-Control': 'no-cache'
+      },
+      dataType: 'json'
+    }).done(function (data, textStatus, jqXHR) {
+      console.log("Email notification sent");
+
+      if (action === 'notify') {
+        hasher.setHash(fid + '?alert=success&msg=notify.done&ts=' + new Date().getTime());
+      }
+    }).fail(function (jqXHR, textStatus, error) {
+      console.log("POST Request Failed: " + textStatus + ", " + error);
+
+      if (action === 'notify') {
+        hasher.setHash(fid + '?alert=danger&msg=notify.fail&ts=' + new Date().getTime());
+      }
+    });*/
+  }
+}
+
 function processUploads(DZ, repo, sync) {
   let uploadFiles = DZ.existingUploads ? DZ.existingUploads : new Array;
   let _files = DZ.getFilesWithStatus(Dropzone.SUCCESS);
@@ -158,6 +202,24 @@ function processUploads(DZ, repo, sync) {
   }
   return uploadFiles;
 }
+function validateUpload(event, field, value) {
+  //placeholder for additional logic based on the event
+  switch (event) {
+    case "addedfile":
+      break;
+    case "success":
+      break;
+    case "removedfile":
+      break;
+    case "error":
+      console.log("custom error code")
+      $('#' + form_id).data('formValidation').updateMessage(field, 'notEmpty', app.data.uploadServerErrorMessage)
+      break;
+    default:
+  }
+  $('#' + field).val(value);
+  $('#' + form_id).data('formValidation').revalidateField(field);
+}
 function getSubmissionSections() {
   let section = [
     {
@@ -167,21 +229,18 @@ function getSubmissionSections() {
       rows: [
         {
           fields: [
-            //"required": true,
             {
-              "id": "eFirstName", "title": app.data["First Name"],
-              "required": true,
-              "className": "col-xs-12 col-md-6"
+              "id": "eFirstName", "title": app.data["First Name"], "className": "col-xs-12 col-md-6",
+              "required": true
             },
             {
-              "id": "eLastName", "title": app.data["Last Name"],
-              "required": true,
-              "className": "col-xs-12 col-md-6"
+              "id": "eLastName", "title": app.data["Last Name"], "className": "col-xs-12 col-md-6",
+              "required": true
             },
             {
-              "id": "eAddress", "title": app.data["Address"],
-              //  "required": true,
-              "className": "col-xs-12 col-md-6"
+              "id": "eAddress", "title": app.data["Address"], "className": "col-xs-12 col-md-6",
+              //  "required": true
+
             },
             { "id": "eCity", "title": app.data["City"], "value": "Toronto", "className": "col-xs-12 col-md-6" }
           ]
@@ -189,9 +248,8 @@ function getSubmissionSections() {
         {
           fields: [{ "id": "ePostalCode", "title": app.data["Postal Code"], "className": "col-xs-12 col-md-6" },
           {
-            "id": "ePrimaryPhone", "title": app.data["Phone"], "validationtype": "Phone",
-            //  "required": true,
-            "className": "col-xs-12 col-md-6"
+            "id": "ePrimaryPhone", "title": app.data["Phone"], "validationtype": "Phone", "className": "col-xs-12 col-md-6",
+            //  "required": true
           },
           { "id": "eFax", "title": app.data["Fax"], "validationtype": "Phone", "className": "col-xs-12 col-md-6" },
           { "id": "eEmail", "title": app.data["Email"], "validationtype": "Email", "validators": { regexp: { regexp: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/, message: 'This field must be a valid email. (###@###.####)' } }, "className": "col-xs-12 col-md-6" }
@@ -230,9 +288,9 @@ function getSubmissionSections() {
             "className": "col-xs-12 col-md-6"
           },
           {
-            "id": "emDescriptiveLocation", "prehelptext": app.data["DescriptiveLocationText"], "title": app.data["graffitiDesLocation"],
-            //  "required": true, 
-            "type": "textarea", "className": "col-xs-12 col-md-12"
+            "id": "emDescriptiveLocation", "posthelptext": app.data["DescriptiveLocationText"], "title": app.data["graffitiDesLocation"],
+            "required": true,
+            "className": "col-xs-12 col-md-6"
           }
           ]
         }
@@ -246,21 +304,20 @@ function getSubmissionSections() {
         {
           fields: [
             {
-              "id": "ePermission",
-              "title": app.data["permission"],
-              //  "required": true,
-              "type": "radio",
-              "className": "col-xs-12 col-md-12",
-              "choices": config.choices.yesNoFull,
-              "orientation": "horizontal"
-            }, {
+              "id": "ePermission", "title": app.data["permission"], "type": "radio", "className": "col-xs-12 col-md-6", "choices": config.choices.yesNoFull, "orientation": "horizontal",
+              //  "required": true              
+            }]
+        },
+        {
+          fields: [
+            {
               "id": "eNotice",
               "title": app.data["notice"],
               //  "required": true,
               //  "type": "radio",
               "type": "dropdown",
               "value": "No",
-              "className": "col-xs-12 col-md-12",
+              "className": "col-xs-12 col-md-6",
               "choices": config.choices.yesNoFull,
               "orientation": "horizontal"
             }, {
@@ -273,7 +330,7 @@ function getSubmissionSections() {
               "options": { format: config.dateFormat },
               "validators": {
                 callback: {
-                  message: app.data["compliance"] + ' is required',
+                  message: app.data["complianceValidation"] + ' is required',
                   // this is added to formValidation
                   callback: function (value, validator, $field) {
                     var checkVal = $("#eNotice").val();
@@ -288,7 +345,7 @@ function getSubmissionSections() {
               //  "type": "radio",
               "type": "dropdown",
               "value": "No",
-              "className": "col-xs-12 col-md-12",
+              "className": "col-xs-12 col-md-6",
               "choices": config.choices.yesNoFull,
               "orientation": "horizontal"
             },
@@ -298,7 +355,8 @@ function getSubmissionSections() {
               "className": "col-xs-12 col-md-12",
               "validators": {
                 callback: {
-                  message: app.data["agreementDetails"] + ' is required',
+                  //  message: app.data["agreementDetails"] + ' is required',
+                  message: app.data["agreementDetailsValidation"] + ' is required',
                   // this is added to formValidation
                   callback: function (value, validator, $field) {
                     var checkVal = $("#eMaintenance").val();
@@ -308,19 +366,16 @@ function getSubmissionSections() {
               }
             },
             {
-              "id": "eArtistInfo", "title": app.data["artistDetails"],
-              //  "required": true, 
-              "className": "col-xs-12 col-md-12"
+              "id": "eArtistInfo", "title": app.data["artistDetails"], "className": "col-xs-12 col-md-12",
+              //  "required": true
             },
             {
-              "id": "eArtSurfaceEnhance", "title": app.data["enhance"],
-              //  "required": true, 
-              "className": "col-xs-12 col-md-12"
+              "id": "eArtSurfaceEnhance", "title": app.data["enhance"], "className": "col-xs-12 col-md-12",
+              //  "required": true
             },
             {
-              "id": "eArtLocalCharacter", "title": app.data["adhere"],
-              //  "required": true, 
-              "className": "col-xs-12 col-md-12"
+              "id": "eArtLocalCharacter", "title": app.data["adhere"], "className": "col-xs-12 col-md-12",
+              //  "required": true
             },
             { "id": "eAdditionalComments", "title": app.data["comments"], "className": "col-xs-12 col-md-12" },
           ]
@@ -328,22 +383,26 @@ function getSubmissionSections() {
     },
     {
       id: "attSec",
-      title: app.data["Attachment Section"],
+      title: app.data["Attachments Section"],
       className: "panel-info",
       rows: [
         {
           fields: [
             { "id": "AttachmentText", "title": "", "type": "html", "html": app.data["AttachmentText"], "className": "col-xs-12 col-md-12" },
-            { "id": "Images", "prehelptext": app.data["ImagesText"], "title": app.data["Images"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Images", "html": '<section aria-label="File Upload Control Field for Images" id="attachment"> <div class="dropzone" id="image_dropzone" aria-label="Dropzone File Upload Control for Images Section"></div></section>', "className": "col-xs-12 col-md-12" },
-            { "id": "Documents", "prehelptext": app.data["DocumentsText"], "title": app.data["Documents"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Documents", "html": '<section aria-label="File Upload Control Field for Documents" id="attachment"> <div class="dropzone" id="document_dropzone" aria-label="Dropzone File Upload Control for Document Section"></div></section>', "className": "col-xs-12 col-md-12" },
+            {
+              "id": "Images", "prehelptext": app.data["ImagesText"], "title": app.data["Images"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Images",
+              "html": '<section aria-label="File Upload Control Field for Images" id="attachment"><div class="dropzone" id="image_dropzone" aria-label="Dropzone File Upload Control for Images Section"></div></section><input type="hidden" name="txtPicName" id="txtPicName" value="" /><section id="image_uploads"></section>', "className": "col-xs-12 col-md-12"
+            },
+            {
+              "id": "Documents", "prehelptext": app.data["DocumentsText"], "title": app.data["Documents"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Documents",
+              "html": '<section aria-label="File Upload Control Field for Documents" id="attachment"><div class="dropzone" id="document_dropzone" aria-label="Dropzone File Upload Control for Document Section"></div></section><section id="doc_uploads"></section>', "className": "col-xs-12 col-md-12"
+            },
             { "id": "DeclarationText", "title": "", "type": "html", "html": app.data["DeclarationText"], "className": "col-xs-12 col-md-12" },
             {
               id: "actionBar",
               type: "html",
-              html: `<div className="col-xs-12 col-md-12"> <button class="btn btn-success" id="closebtn"><span class="glyphicon glyphicon-remove-sign" aria-hidden="true"></span>Close</button> <button class="btn btn-success" id="savebtn"><span class="glyphicon glyphicon-send" aria-hidden="true"></span> ` + config.button.submitReport + `</button>
-                 </div>`
-              //<button class="btn btn-success" id="printbtn"><span class="glyphicon glyphicon-print" aria-hidden="true"></span>Print</button>
-              //
+              html: `<div className="col-xs-12 col-md-12"><button class="btn btn-success" id="savebtn"><span class="glyphicon glyphicon-send" aria-hidden="true"></span> ` + config.button.submitReport + `</button>
+                 <button class="btn btn-success" id="printbtn"><span class="glyphicon glyphicon-print" aria-hidden="true"></span>Print</button></div>`
             },
             {
               id: "successFailRow",
@@ -351,7 +410,6 @@ function getSubmissionSections() {
               className: "col-xs-12 col-md-12",
               html: `<div id="successFailArea" className="col-xs-12 col-md-12"></div>`
             }]
-
         }
       ]
     }

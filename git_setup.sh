@@ -20,7 +20,8 @@ git init
 
 #first commit
 git add .
-git commit -m "First commit"
+#git commit -m "First commit"
+git commit -m "Modifications"
 
 #add and push to remote
 git remote add origin ${REMOTE_PATH}${APP_NAME}
