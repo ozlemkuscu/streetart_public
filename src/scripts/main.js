@@ -1,46 +1,51 @@
 //A sample main js file. Use this as a starting point for your app.
-const app = new cot_app("Graffiti Exemption");
-const configURL = "//www1.toronto.ca/static_files/WebApps/CommonComponents/graffiti_exemption/JSONFeed.js";
+const app = new cot_app("StreetARToronto Artist Directory");
+const configURL = "//www1.toronto.ca/static_files/WebApps/CommonComponents/streetart/JSONFeed.js";
+const mailSend = false;
+
 let form, config, httpHost;
 //let upload_selector = 'admin_dropzone';
 
-const form_id = "graffiti_exemption";
-let docDropzone;
+const form_id = "streetart";
+let resumeDropzone;
 let imageDropzone;
-let cookie_SID = form_id + ".sid";
 
-let repo = "graffiti_exemption";
+let repo = "streetart";
 
 $(document).ready(function () {
-  app.render(function () {
-    initialize();
-  }
-  );
+
+  app.render(function () { initialize(); });
   function renderApp() {
     httpHost = detectHost();
     loadForm();
     app.setBreadcrumb(app.data['breadcrumbtrail']);
     app.addForm(form, 'top');
-    docDropzone = new Dropzone("div#document_dropzone", $.extend(config.admin.docDropzonePublic, {
-      "dz_id": "document_dropzone", "fid": "", "form_id": form_id,
+    resumeDropzone = new Dropzone("div#resume_dropzone", $.extend(config.admin.resumeDropzonePublic, {
+      "dz_id": "resume_dropzone", "fid": fid, "form_id": form_id,
       "url": config.api_public.upload + config.default_repo + '/' + repo,
     }));
+
     imageDropzone = new Dropzone("div#image_dropzone", $.extend(config.admin.imageDropzonePublic, {
-      "init": function () {
-        let fieldname = "txtPicName";
-        this
-          .on("addedfile", function (file) { validateUpload("addedfile", fieldname, file.name); })
-          .on("success", function (file) { validateUpload("success", fieldname, file.name); })
-          .on("removedfile", function () { validateUpload("removedFile", fieldname, ""); })
-          .on("error", function () { validateUpload("error", fieldname, ""); });
-      },
-      "dz_id": "image_dropzone", "fid": "", "form_id": form_id,
+      "dz_id": "image_dropzone", "fid": fid, "form_id": form_id,
       "url": config.api_public.upload + config.default_repo + '/' + repo,
     }));
+
     initForm();
+
   }
   function initialize() {
     loadVariables();
+  }
+  function loadForm() {
+    form = new CotForm({
+      id: form_id,
+      title: 'Online Artist Application',
+      useBinding: false,
+      rootPath: config.httpHost.rootPath_public[httpHost],
+      sections: getSubmissionSections(),
+      success: function () {
+      }
+    });
   }
   function loadVariables() {
     $.ajax({
@@ -59,17 +64,6 @@ $(document).ready(function () {
       }
     })
   }
-  function loadForm() {
-    form = new CotForm({
-      id: form_id,
-      title: app.data["Form Title"],
-      useBinding: false,
-      rootPath: config.httpHost.rootPath_public[httpHost],
-      sections: $.merge(getSubmissionSections(), getAdminSectionsBottom()),
-      success: function () {
-      }
-    });
-  }
   function detectHost() {
     switch (window.location.origin) {
       case config.httpHost.root_public.dev:
@@ -84,34 +78,41 @@ $(document).ready(function () {
     }
   }
 });
+
 function initForm() {
+
   var dataCreated = new Date();
   dataCreated = moment(dataCreated).format(config.dateTimeFormat);
   $("#recCreated").val(dataCreated);
-  $("#lsteStatus").val("New");
+
+  $("#Status").val("New");
+
   $("#closebtn").click(function () { window.close(); });
   $("#printbtn").click(function () { window.print(); });
   $("#savebtn").click(function () {
+
     let form_fv = $('#' + form_id).data('formValidation');
     form_fv.validate();
     if (form_fv.isValid()) { submitForm() }
   });
-  $('#eNotice').on('click', function () { $('#' + form_id).formValidation('revalidateField', $('#ComplianceDate')); });
-  $('#eMaintenance').on('change', function () { $('#' + form_id).formValidation('revalidateField', $('#eMaintenanceAgreement')); });
+
   $(".dz-hidden-input").attr("aria-hidden", "true");
   $(".dz-hidden-input").attr("aria-label", "File Upload Control");
 
-  $('#' + form_id).data('formValidation')
-    .addField('txtPicName', { excluded: false, validators: { notEmpty: { message: app.data["imageValidation"] } } })
+  //$("h1").hide();
+
 }
 function submitForm() {
   //  $("#savebtn").prop('disabled', true);
   let payload = form.getData();
-  payload.doc_uploads = processUploads(docDropzone, repo, false);
-  payload.image_uploads = processUploads(imageDropzone, repo, false);
+  payload.resumeUploads = processUploads(resumeDropzone, repo, false);
+  payload.imageUploads = processUploads(imageDropzone, repo, false);
+
+  // let queryString = payload.resumeUploads[0] ? "?KeepFiles=" + payload.resumeUploads[0].bin_id : "";
 
   $.ajax({
-    url: config.httpHost.app_public[httpHost] + config.api_public.post + repo + '?sid=' + getCookie(cookie_SID),
+    //   url: config.httpHost.app_public[httpHost] + config.api_public.post + repo + queryString,
+    url: config.httpHost.app_public[httpHost] + config.api_public.post + repo + '?sid=' + getCookie('streetart.sid'),
     type: 'POST',
     data: JSON.stringify(payload),
     headers: {
@@ -122,66 +123,20 @@ function submitForm() {
     success: function (data) {
       if ((data.EventMessageResponse.Response.StatusCode) == 200) {
         $('#app-content-top').html(config.messages.submit.done);
+        if (mailSend) {
+          emailNotice(data.EventMessageResponse.Event.EventID, 'notify');
+        }
         //    $('#app-content-bottom').html(app.data["Success Message"]);
       }
     },
     error: function () {
       $('#successFailArea').html(config.messages.submit.fail);
     }
-  }).done(function (data, textStatus, jqXHR) {
-    // notify code section
-    if (data && data.EventMessageResponse && data.EventMessageResponse.Event && data.EventMessageResponse.Event.EventID) {
-      // Email report notice to emergency management captain and incident manager/reporters
-      emailNotice(data.EventMessageResponse.Event.EventID, 'notify', ['captain']);
-    } else {
-      hasher.setHash('new?alert=danger&msg=' + msg.fail + '&ts=' + new Date().getTime());
-    }
+  }).done(function () {
+
+
   });
 }
-function emailNotice(fid, action, recipients) {
-  var emailCaptain = "'Ozlem Kuscu': 'ozlem.kuscu@toronto.ca'";//config.captain;
-  if (typeof emailCaptain !== 'undefined' && emailCaptain != "") {
-    var emailTo = config.captain;
-    var emailRecipients = $.map(emailTo, function (email) {
-      return email;
-    }).filter(function (itm, i, a) {
-      return i === a.indexOf(itm);
-    }).join(',');
-
-    console.log('------------' + emailRecipients, fid);
-
-    var payload = JSON.stringify({
-      'email': emailRecipients,
-      'id': fid,
-      'status': action,
-      'home': 'temp'
-    });
-
-    /*$.ajax({
-      url: config.api.email,
-      type: 'POST',
-      data: payload,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8;',
-        'Cache-Control': 'no-cache'
-      },
-      dataType: 'json'
-    }).done(function (data, textStatus, jqXHR) {
-      console.log("Email notification sent");
-
-      if (action === 'notify') {
-        hasher.setHash(fid + '?alert=success&msg=notify.done&ts=' + new Date().getTime());
-      }
-    }).fail(function (jqXHR, textStatus, error) {
-      console.log("POST Request Failed: " + textStatus + ", " + error);
-
-      if (action === 'notify') {
-        hasher.setHash(fid + '?alert=danger&msg=notify.fail&ts=' + new Date().getTime());
-      }
-    });*/
-  }
-}
-
 function processUploads(DZ, repo, sync) {
   let uploadFiles = DZ.existingUploads ? DZ.existingUploads : new Array;
   let _files = DZ.getFilesWithStatus(Dropzone.SUCCESS);
@@ -202,24 +157,6 @@ function processUploads(DZ, repo, sync) {
   }
   return uploadFiles;
 }
-function validateUpload(event, field, value) {
-  //placeholder for additional logic based on the event
-  switch (event) {
-    case "addedfile":
-      break;
-    case "success":
-      break;
-    case "removedfile":
-      break;
-    case "error":
-      console.log("custom error code")
-      $('#' + form_id).data('formValidation').updateMessage(field, 'notEmpty', app.data.uploadServerErrorMessage)
-      break;
-    default:
-  }
-  $('#' + field).val(value);
-  $('#' + form_id).data('formValidation').revalidateField(field);
-}
 function getSubmissionSections() {
   let section = [
     {
@@ -229,202 +166,108 @@ function getSubmissionSections() {
       rows: [
         {
           fields: [
+            //"required": true,
+            { "id": "FirstName", "title": app.data["First Name"], "className": "col-xs-12 col-md-6" },
+            { "id": "LastName", "title": app.data["Last Name"], "className": "col-xs-12 col-md-6" },
+            { "id": "ArtistAlias", "title": app.data["Artist Alias"], "className": "col-xs-12 col-md-6" },
+            { "id": "Organization", "title": app.data["Organization"], "className": "col-xs-12 col-md-6" },
             {
-              "id": "eFirstName", "title": app.data["First Name"], "className": "col-xs-12 col-md-6",
-              "required": true
+              "id": "PreferredContactName",
+              "title": app.data["Preferred Name"],
+              "type": "radio",
+              "className": "col-xs-12 col-md-6",
+              "choices": config.preferredName.choices,
+              "orientation": "horizontal",
+              "prehelptext": app.data["PreferredNameText"]
             },
-            {
-              "id": "eLastName", "title": app.data["Last Name"], "className": "col-xs-12 col-md-6",
-              "required": true
-            },
-            {
-              "id": "eAddress", "title": app.data["Address"], "className": "col-xs-12 col-md-6",
-              //  "required": true
-
-            },
-            { "id": "eCity", "title": app.data["City"], "value": "Toronto", "className": "col-xs-12 col-md-6" }
+            { "id": "OrganizationDescription", "title": app.data["Artist Bio"], "type": "textarea", "className": "col-xs-12 col-md-12" },
+            { "id": "Address", "title": app.data["Address"], "className": "col-xs-12 col-md-6" },
+            { "id": "City", "title": app.data["City"], "className": "col-xs-12 col-md-6" },
+            { "id": "Province", "title": app.data["Province"], "className": "col-xs-12 col-md-6" },
+            { "id": "PostalCode", "title": app.data["Postal Code"], "className": "col-xs-12 col-md-6" },
+            { "id": "PrimaryPhone", "title": app.data["Primary Phone"], "validationtype": "Phone", "className": "col-xs-12 col-md-6" },
+            { "id": "OtherPhone", "title": app.data["Other Phone"], "validationtype": "Phone", "className": "col-xs-12 col-md-6" },
+            { "id": "Email", "title": app.data["Email"], "validationtype": "Email", "validators": { regexp: { regexp: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/, message: 'This field must be a valid email. (###@###.####)' } }, "className": "col-xs-12 col-md-6" },
+            { "id": "URL", "title": app.data["URL"], "value": "http://", "className": "col-xs-12 col-md-6" }
           ]
-        },
-        {
-          fields: [{ "id": "ePostalCode", "title": app.data["Postal Code"], "className": "col-xs-12 col-md-6" },
-          {
-            "id": "ePrimaryPhone", "title": app.data["Phone"], "validationtype": "Phone", "className": "col-xs-12 col-md-6",
-            //  "required": true
-          },
-          { "id": "eFax", "title": app.data["Fax"], "validationtype": "Phone", "className": "col-xs-12 col-md-6" },
-          { "id": "eEmail", "title": app.data["Email"], "validationtype": "Email", "validators": { regexp: { regexp: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/, message: 'This field must be a valid email. (###@###.####)' } }, "className": "col-xs-12 col-md-6" }
+        }, {
+          fields: [
+            {
+              "id": "ContactMethod",
+              "title": app.data["preferredMethod"],
+              "type": "radio",
+              "choices": config.preferredMethod.choices,
+              "orientation": "horizontal",
+              "className": "col-xs-12 col-md-6"
+            }
           ]
         }
       ]
     },
+
     {
-      id: "graffitiSec",
-      title: app.data["Graffiti Section"],
+      id: "workSec",
+      title: app.data["Work Details Section"],
       className: "panel-info",
       rows: [
         {
           fields: [
+            { "id": "workToPublicText", "title": "", "type": "html", "html": app.data["WorkToPublicText"], "className": "col-xs-12 col-md-12" },
             {
-              "id": "emSameAddress",
-              "title": "",
-              "type": "checkbox",
-              "choices": config.sameAsAbove.choices,
-              "class": "col-xs-12 col-md-12"
-            },
-            {
-              "id": "emAddress", "title": app.data["Address"],
-              //  "required": true, 
+              "id": "WorkToPublic",
+              "orientation": "horizontal",
+              "title": app.data["Work To Public"],
+              "type": "radio",
+              "value": "",
+              "choices": config.choices.yesNoFull,
               "className": "col-xs-12 col-md-6"
             },
-            { "id": "emCity", "title": app.data["City"], "value": "Toronto", "className": "col-xs-12 col-md-6" }
-          ]
-        },
-        {
-          fields: [{ "id": "emPostalCode", "title": app.data["Postal Code"], "className": "col-xs-12 col-md-6" },
-          { "id": "emPrimaryPhone", "title": app.data["Phone"], "validationtype": "Phone", "className": "col-xs-12 col-md-6" },
-          {
-            "id": "emFacingStreet", "title": app.data["Facing Street"],
-            //  "required": true, 
-            "className": "col-xs-12 col-md-6"
-          },
-          {
-            "id": "emDescriptiveLocation", "posthelptext": app.data["DescriptiveLocationText"], "title": app.data["graffitiDesLocation"],
-            "required": true,
-            "className": "col-xs-12 col-md-6"
-          }
+            { "id": "Profile", "prehelptext": app.data["ProfileText"], "title": app.data["Profile"], "type": "textarea", "className": "col-xs-12 col-md-12" },
+            { "id": "IntNavail", "title": app.data["Availability"], "type": "textarea", "className": "col-xs-12 col-md-12" },
+            { "id": "Exp", "title": app.data["Experience"], "type": "textarea", "className": "col-xs-12 col-md-12" },
+            { "id": "WorkHistory", "title": app.data["Work History"], "type": "textarea", "className": "col-xs-12 col-md-12" }
           ]
         }
       ]
     },
     {
-      id: "detailsSec",
-      title: app.data["Details Section"],
+      id: "cvSec",
+      title: app.data["CV Section"],
       className: "panel-info",
       rows: [
         {
           fields: [
-            {
-              "id": "ePermission", "title": app.data["permission"], "type": "radio", "className": "col-xs-12 col-md-6", "choices": config.choices.yesNoFull, "orientation": "horizontal",
-              //  "required": true              
-            }]
-        },
-        {
-          fields: [
-            {
-              "id": "eNotice",
-              "title": app.data["notice"],
-              //  "required": true,
-              //  "type": "radio",
-              "type": "dropdown",
-              "value": "No",
-              "className": "col-xs-12 col-md-6",
-              "choices": config.choices.yesNoFull,
-              "orientation": "horizontal"
-            }, {
-              "id": "ComplianceDate",
-              "title": app.data["compliance"],
-              //  "required": true,
-              "type": "datetimepicker",
-              "placeholder": config.dateFormat,
-              "className": "col-xs-12 col-md-6",
-              "options": { format: config.dateFormat },
-              "validators": {
-                callback: {
-                  message: app.data["complianceValidation"] + ' is required',
-                  // this is added to formValidation
-                  callback: function (value, validator, $field) {
-                    var checkVal = $("#eNotice").val();
-                    return (checkVal !== "Yes") ? true : (value !== '');
-                  }
-                }
-              }
-            }, {
-              "id": "eMaintenance",
-              "title": app.data["maintenance"],
-              //  "required": true,
-              //  "type": "radio",
-              "type": "dropdown",
-              "value": "No",
-              "className": "col-xs-12 col-md-6",
-              "choices": config.choices.yesNoFull,
-              "orientation": "horizontal"
-            },
-            {
-              "id": "eMaintenanceAgreement", "title": app.data["agreementDetails"],
-              //  "required": true, 
-              "className": "col-xs-12 col-md-12",
-              "validators": {
-                callback: {
-                  //  message: app.data["agreementDetails"] + ' is required',
-                  message: app.data["agreementDetailsValidation"] + ' is required',
-                  // this is added to formValidation
-                  callback: function (value, validator, $field) {
-                    var checkVal = $("#eMaintenance").val();
-                    return (checkVal !== "Yes") ? true : (value !== '');
-                  }
-                }
-              }
-            },
-            {
-              "id": "eArtistInfo", "title": app.data["artistDetails"], "className": "col-xs-12 col-md-12",
-              //  "required": true
-            },
-            {
-              "id": "eArtSurfaceEnhance", "title": app.data["enhance"], "className": "col-xs-12 col-md-12",
-              //  "required": true
-            },
-            {
-              "id": "eArtLocalCharacter", "title": app.data["adhere"], "className": "col-xs-12 col-md-12",
-              //  "required": true
-            },
-            { "id": "eAdditionalComments", "title": app.data["comments"], "className": "col-xs-12 col-md-12" },
+            { "id": "chkCV", "title": "", "type": "checkbox", "choices": config.chkCVAvailable.choices, "orientation": "horizontal", "class": "col-xs-12 col-md-4", "className": "col-xs-12 col-md-12" },
+            { "id": "CV", "title": app.data["CV"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Resume", "html": '<section aria-label="File Upload Control Field for Resume" id="attachment"> <div class="dropzone" id="resume_dropzone" aria-label="Dropzone File Upload Control for Resume Section"></div></section>', "className": "col-xs-12 col-md-12" }
           ]
         }]
     },
     {
-      id: "attSec",
-      title: app.data["Attachments Section"],
+      id: "imageSec",
+      title: app.data["Images Section"],
       className: "panel-info",
       rows: [
         {
           fields: [
-            { "id": "AttachmentText", "title": "", "type": "html", "html": app.data["AttachmentText"], "className": "col-xs-12 col-md-12" },
-            {
-              "id": "Images", "prehelptext": app.data["ImagesText"], "title": app.data["Images"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Images",
-              "html": '<section aria-label="File Upload Control Field for Images" id="attachment"><div class="dropzone" id="image_dropzone" aria-label="Dropzone File Upload Control for Images Section"></div></section><input type="hidden" name="txtPicName" id="txtPicName" value="" /><section id="image_uploads"></section>', "className": "col-xs-12 col-md-12"
-            },
-            {
-              "id": "Documents", "prehelptext": app.data["DocumentsText"], "title": app.data["Documents"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Documents",
-              "html": '<section aria-label="File Upload Control Field for Documents" id="attachment"><div class="dropzone" id="document_dropzone" aria-label="Dropzone File Upload Control for Document Section"></div></section><section id="doc_uploads"></section>', "className": "col-xs-12 col-md-12"
-            },
-            { "id": "DeclarationText", "title": "", "type": "html", "html": app.data["DeclarationText"], "className": "col-xs-12 col-md-12" },
+            { "id": "Images", "prehelptext": app.data["ImagesText"], "title": app.data["Images"], "type": "html", "aria-label": "Dropzone File Upload Control Field for Images", "html": '<section aria-label="File Upload Control Field for Images" id="attachment"> <div class="dropzone" id="image_dropzone" aria-label="Dropzone File Upload Control for Images Section"></div></section>', "className": "col-xs-12 col-md-12" },
+            { "id": "FooterText", "title": "", "type": "html", "html": app.data["FooterText1"], "className": "col-xs-12 col-md-12" },
+            { "id": "FooterText", "title": "", "type": "html", "html": app.data["FooterText2"], "className": "col-xs-12 col-md-12" },
+            { "id": "FooterText", "title": "", "type": "html", "html": app.data["FooterText3"], "className": "col-xs-12 col-md-12" },
+            { "id": "chkDeclaration", "title": "", "type": "checkbox", "choices": config.chkDeclaration.choices, "orientation": "horizontal", "class": "col-xs-12 col-md-4", "className": "col-xs-12 col-md-12" },
             {
               id: "actionBar",
               type: "html",
               html: `<div className="col-xs-12 col-md-12"><button class="btn btn-success" id="savebtn"><span class="glyphicon glyphicon-send" aria-hidden="true"></span> ` + config.button.submitReport + `</button>
                  <button class="btn btn-success" id="printbtn"><span class="glyphicon glyphicon-print" aria-hidden="true"></span>Print</button></div>`
+              //<button class="btn btn-success" id="printbtn"><span class="glyphicon glyphicon-print" aria-hidden="true"></span>Print</button>
+              //
             },
             {
               id: "successFailRow",
               type: "html",
               className: "col-xs-12 col-md-12",
               html: `<div id="successFailArea" className="col-xs-12 col-md-12"></div>`
-            }]
-        }
-      ]
-    }
-  ]
-  return section;
-}
-function getAdminSectionsBottom() {
-  let section = [
-    {
-      id: "hiddenSec",
-      title: "",
-      className: "panel-info",
-      rows: [
-        {
-          fields: [
+            },
             {
               "id": "fid",
               "type": "html",
@@ -443,27 +286,12 @@ function getAdminSectionsBottom() {
             }, {
               "id": "recCreated",
               "type": "html",
-              "html": "<input type=\"text\" id=\"recCreated\" aria-label=\"Record Creation Date\" aria-hidden=\"true\" name=\"recCreated\">",
+              "html": "<input type=\"text\" id=\"complaintCreated\" aria-label=\"Complaint Creation Date\" aria-hidden=\"true\" name=\"complaintCreated\">",
               "class": "hidden"
             }, {
-              "id": "lsteStatus",
+              "id": "lstStatus",
               "type": "html",
-              "html": "<input type=\"hidden\" aria-label=\"Status\" aria-hidden=\"true\" value=\"New\" id=\"lsteStatus\" name=\"lsteStatus\">",
-              "class": "hidden"
-            }, {
-              "id": "AddressGeoID",
-              "type": "html",
-              "html": "<input type=\"hidden\" aria-label=\"Address Geo ID\" aria-hidden=\"true\" id=\"AddressGeoID\" name=\"AddressGeoID\">",
-              "class": "hidden"
-            }, {
-              "id": "MapAddress",
-              "type": "html",
-              "html": "<input type=\"hidden\" aria-label=\"Map Address\" aria-hidden=\"true\" id=\"MapAddress\" name=\"MapAddress\">",
-              "class": "hidden"
-            }, {
-              "id": "ShowMap",
-              "type": "html",
-              "html": "<input type=\"hidden\" aria-label=\"Show Map\" aria-hidden=\"true\" id=\"ShowMap\" name=\"ShowMap\">",
+              "html": "<input type=\"hidden\" aria-label=\"Status\" aria-hidden=\"true\" id=\"lstStatus\" name=\"lstStatus\">",
               "class": "hidden"
             }]
 
@@ -473,5 +301,84 @@ function getAdminSectionsBottom() {
   ]
   return section;
 }
+function emailNotice(fid, action) {
+  let emailTo = {};
+  let emailCaptain = config.captain_emails;
+  let emailAdmin = config.admin_emails;
+  if (typeof emailCaptain !== 'undefined' && emailCaptain != "") {
+    $.extend(emailTo, emailCaptain);
+  }
+  if (typeof emailAdmin !== 'undefined' && emailAdmin != "") {
+    //  $.extend(emailTo, emailAdmin);
+  }
 
+  var emailRecipients = $.map(emailTo, function (email) {
+    return email;
+  }).filter(function (itm, i, a) {
+    return i === a.indexOf(itm);
+  }).join(',');
 
+  var payload = JSON.stringify({
+    'emailTo': emailRecipients,
+    'emailFrom': (config.messages.notify.emailFrom ? config.messages.notify.emailFrom : 'wmDev@toronto.ca'),
+    'id': fid,
+    'status': action,
+    'body': (config.messages.notify.emailBody ? config.messages.notify.emailBody : 'New submission has been received.'),
+    'emailSubject': (config.messages.notify.emailSubject ? config.messages.notify.emailSubject : 'New submission')
+  });
+
+  $.ajax({
+    url: config.httpHost.app[httpHost] + config.api.email,
+    type: 'POST',
+    data: payload,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8;',
+      'Cache-Control': 'no-cache'
+    },
+    dataType: 'json'
+  }).done(function (data, textStatus, jqXHR) {
+    if (action === 'notify') {
+      hasher.setHash(fid + '?alert=success&msg=notify.done&ts=' + new Date().getTime());
+    }
+  }).fail(function (jqXHR, textStatus, error) {
+    console.log("POST Request Failed: " + textStatus + ", " + error);
+    if (action === 'notify') {
+      hasher.setHash(fid + '?alert=danger&msg=notify.fail&ts=' + new Date().getTime());
+    }
+  });
+}
+
+CotForm.prototype.getData = function () {
+  var data = {}, blanks = {}, rowIndexMap = {}; // {stringIndex: intIndex}
+  $.each($('#' + this.cotForm.id).serializeArray(), function (i, o) {
+    if (o.name.indexOf('row[') !== -1) {
+      var sRowIndex = o.name.substring(o.name.indexOf('[') + 1, o.name.indexOf(']'));
+      if (sRowIndex !== 'template') {
+        var rows = data['rows'] || [];
+        var iRowIndex = rowIndexMap[sRowIndex];
+        if (iRowIndex === undefined) {
+          rows.push({});
+          iRowIndex = rows.length - 1;
+          rowIndexMap[sRowIndex] = iRowIndex;
+        }
+        rows[iRowIndex][o.name.split('.')[1]] = o.value;
+        data['rows'] = rows;
+      }
+    } else {
+      if (data.hasOwnProperty(o.name)) {
+        data[o.name] = $.makeArray(data[o.name]);
+        data[o.name].push(o.value);
+      } else {
+        data[o.name] = o.value;
+      }
+    }
+  });
+
+  var _blanks = $('#' + this.cotForm.id + ' [name]')
+  $.each(_blanks, function () {
+    if (!data.hasOwnProperty(this.name)) {
+      blanks[this.name] = '';
+    }
+  });
+  return $.extend(data, blanks);
+};

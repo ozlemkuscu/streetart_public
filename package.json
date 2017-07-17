@@ -1,7 +1,7 @@
 {
-  "name": "graffiti_exemption",
+  "name": "streetart",
   "version": "1.0.0",
-  "description": "Graffiti Exemptions",
+  "description": "Application to manage artists directory and exemptions",
   "author": "Ozlem Kuscu",
   "devDependencies": {
     "babel-preset-es2015": "^6.22.0",

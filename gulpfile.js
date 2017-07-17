@@ -44,8 +44,8 @@ const imageDir = 'img';
 const scriptDir = 'scripts';
 const styleDir = 'styles';
 //where is this app deployed? can be overridden locally in your env file
-const devDeployPath = 'O:\\work\\decom\\graffiti_exemption_public\\';
-const qaDeployPath = 'O:\\work\\decom\\graffiti_exemption_public_qa\\';
+const devDeployPath = 'O:\\work\\decom\\streetart_public\\';
+const qaDeployPath = 'O:\\work\\decom\\streetart_qa\\';
 //what the aws deploy info?
 const awsRegion = 'us-east-1';
 const awsBucket = 'wrp-wp-resource-dev-0';
